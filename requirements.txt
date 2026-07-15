@@ -1,0 +1,5 @@
+# Reference-only dependency inventory. This is not a deployment manifest.
+aiohttp
+fastapi
+uvicorn
+jinja2

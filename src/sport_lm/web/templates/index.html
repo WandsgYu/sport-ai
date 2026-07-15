@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ app_title }}</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #f5f7fb; color: #172033; }
+      header, main { max-width: 920px; margin: auto; padding: 24px; }
+      header { background: #15223b; color: white; max-width: none; }
+      form, article { background: white; padding: 18px; margin: 14px 0; border-radius: 12px; }
+      input, select, button { padding: 8px; margin-right: 8px; }
+      a { color: #3157b7; }
+      .meta { color: #667085; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <header><h1>{{ app_title }}</h1><p>只展示经过白名单筛选的事件元数据。</p></header>
+    <main>
+      <form method="get">
+        <select name="level">
+          <option value="">全部级别</option>
+          <option value="INFO" {% if filters.level == 'INFO' %}selected{% endif %}>INFO</option>
+          <option value="WARNING" {% if filters.level == 'WARNING' %}selected{% endif %}>WARNING</option>
+          <option value="ERROR" {% if filters.level == 'ERROR' %}selected{% endif %}>ERROR</option>
+        </select>
+        <input name="event_type" placeholder="事件类型" value="{{ filters.event_type }}" />
+        <button type="submit">筛选</button>
+      </form>
+      {% for event in events %}
+      <article>
+        <strong>{{ event.type or 'unknown' }}</strong>
+        <div class="meta">{{ event.ts }} · {{ event.level or 'INFO' }} · {{ event.subject_ref or 'anonymous' }}</div>
+        {% if event.request_id %}<a href="/request/{{ event.request_id }}">查看本次事件链</a>{% endif %}
+      </article>
+      {% else %}<p>暂无脱敏事件。</p>{% endfor %}
+    </main>
+  </body>
+</html>

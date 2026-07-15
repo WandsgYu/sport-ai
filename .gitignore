@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+*.csv
+
+# Virtualenv
+.venv/
+venv/
+ENV/
+myenv/
+
+# Logs
+*.log
+logs/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Private data and runtime artifacts
+*.csv
+*.jsonl
+*.sqlite*
+*.db
+storage.json
+private/
+data/private/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
