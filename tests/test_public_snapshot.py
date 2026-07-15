@@ -8,6 +8,8 @@ import tempfile
 import unittest
 
 from src.sport_lm.api.sports import query_user_info, update_user_data
+from src.sport_lm.api.mock import SyntheticSportsAdapter
+from src.sport_lm.demo import SyntheticAgentSession, run_scripted_demo
 from src.sport_lm.main import main
 from src.sport_lm.security.privacy import pseudonymize, redact_text, sanitize
 from src.sport_lm.tools import run_tool
@@ -89,9 +91,49 @@ class PublicSnapshotTests(unittest.TestCase):
         self.assertNotIn("synthetic-private-message", stored)
         self.assertNotIn("private-value", stored)
 
-    def test_public_entry_point_refuses_to_start(self) -> None:
-        with self.assertRaises(SystemExit):
-            main()
+    def test_synthetic_success_path_completes(self) -> None:
+        transcript = asyncio.run(run_scripted_demo())
+        final_turn = transcript[-1][1]
+        self.assertEqual(final_turn.tool_result["ErrCode"], 0)
+        self.assertEqual(
+            final_turn.tool_result["data"]["operation_id"],
+            "synthetic-enrollment-001",
+        )
+
+    def test_confirmation_requires_parameters(self) -> None:
+        session = SyntheticAgentSession(SyntheticSportsAdapter())
+        turn = asyncio.run(session.handle("确认提交"))
+        self.assertIsNone(turn.tool_call)
+        self.assertIn("尚未选择", turn.reply)
+
+    def test_state_change_requires_confirmation(self) -> None:
+        adapter = SyntheticSportsAdapter()
+        session = SyntheticAgentSession(adapter)
+        turn = asyncio.run(session.handle("我要报名示例项目B"))
+        self.assertIsNone(turn.tool_call)
+        self.assertEqual(adapter.write_count, 0)
+
+    def test_idempotent_confirmation_does_not_repeat_write(self) -> None:
+        adapter = SyntheticSportsAdapter()
+        session = SyntheticAgentSession(adapter)
+        asyncio.run(session.handle("我要报名示例项目C"))
+        first = asyncio.run(session.handle("确认提交"))
+        second = asyncio.run(session.handle("确认提交"))
+        self.assertEqual(adapter.write_count, 1)
+        self.assertEqual(
+            first.tool_result["data"]["operation_id"],
+            second.tool_result["data"]["operation_id"],
+        )
+        self.assertTrue(second.tool_result["idempotent_replay"])
+
+    def test_demo_events_do_not_store_raw_messages(self) -> None:
+        session = SyntheticAgentSession(SyntheticSportsAdapter())
+        asyncio.run(session.handle("我要报名示例项目D"))
+        serialized = json.dumps(session.events, ensure_ascii=False)
+        self.assertNotIn("我要报名", serialized)
+
+    def test_public_entry_point_runs_successfully(self) -> None:
+        main()
 
 
 if __name__ == "__main__":

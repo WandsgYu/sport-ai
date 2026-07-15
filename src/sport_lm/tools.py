@@ -66,6 +66,9 @@ async def run_tool(
     arguments: str,
     sop_path: str,
     user_info: dict[str, Any] | None = None,
+    *,
+    adapter: Any | None = None,
+    idempotency_key: str = "",
 ) -> str:
     try:
         payload = json.loads(arguments) if arguments else {}
@@ -90,7 +93,11 @@ async def run_tool(
                 pseudonymize(current_subject),
             )
             return _json_error(403, "禁止查询其他主体。")
-        result = await query_user_info(current_subject)
+        result = (
+            await adapter.query_user_info(current_subject)
+            if adapter is not None
+            else await query_user_info(current_subject)
+        )
         return json.dumps(result, ensure_ascii=False)
 
     if name == "update_user_data":
@@ -104,7 +111,14 @@ async def run_tool(
             "subject_id": current_subject,
             "selected_items": _normalize_items(user_data.get("selected_items")),
         }
-        result = await update_user_data(safe_payload)
+        result = (
+            await adapter.update_user_data(
+                safe_payload,
+                idempotency_key=idempotency_key or "missing-idempotency-key",
+            )
+            if adapter is not None
+            else await update_user_data(safe_payload)
+        )
         return json.dumps(result, ensure_ascii=False)
 
     return _json_error(404, "未实现的工具。")
