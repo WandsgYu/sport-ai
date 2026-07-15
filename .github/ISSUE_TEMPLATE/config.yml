@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private security report
+    url: https://github.com/WandsgYu/sport-ai/security/advisories/new
+    about: Report suspected credentials, personal data, or other security findings privately.
