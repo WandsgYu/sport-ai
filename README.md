@@ -1,121 +1,149 @@
-# Sport-LM：旧平台 Agent 设计参考快照
+# Sport-LM
+
+**A sanitized, non-deployable reference snapshot of a tool-using conversational agent built for a retired, project-specific workflow.**
+
+[中文说明](README.zh-CN.md) · [Architecture](#architecture) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE.md)
+
+[![Public snapshot checks](https://github.com/WandsgYu/sport-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/WandsgYu/sport-ai/actions/workflows/ci.yml)
+![Status: reference only](https://img.shields.io/badge/status-reference%20only-8b5cf6)
+![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
 
 > [!IMPORTANT]
-> 本仓库只展示一个已经结束的、面向特定旧平台的 Agent 项目的设计思路与脱敏代码，**仅供学习和作品展示**。
-> 它不是通用框架，不具备迁移能力，也不具备重新部署或恢复原系统的能力。
+> Sport-LM is published for learning, design review, and portfolio presentation. It is **not a reusable framework, migration package, API specification, or deployment package**. The original platform adapter, credentials, schemas, data, and operational entry point have been intentionally removed.
 
-## 使用边界
+## At a glance
 
-公开版本有意移除了以下内容：
+Sport-LM demonstrates how a business-process agent can combine:
 
-- 原组织、人员、联系方式、用户关系映射和业务数据；
-- 原平台域名、IP、接口路径、应用标识、密钥和鉴权方式；
-- 原平台的请求参数、响应结构及可执行写入逻辑；
-- 生产日志、测试数据、内部接口文档和运维信息；
-- 可连接原平台的配置与启动入口。
+- constrained tool use instead of model-generated claims of success;
+- scenario routing and minimal SOP retrieval;
+- subject-level authorization boundaries;
+- prompt-injection checks as defense in depth;
+- privacy-minimized observability;
+- clean separation between agent orchestration and private platform adapters.
 
-因此，本仓库不能用于连接、查询、修改或恢复原平台，也不应被视为部署文档、接口文档或迁移方案。任何真实系统都必须重新完成需求分析、权限设计、数据建模、安全评审和适配开发。
+The public snapshot preserves those design decisions while making the original system impossible to reconstruct from this repository.
 
-## 项目背景（已泛化）
+| Area | Public snapshot behavior |
+| --- | --- |
+| Legacy business platform | Removed; placeholder always returns `503` |
+| Message-channel integration | Replaced by an abstract protocol |
+| Identity data | Generic anonymous fields only |
+| Logs | Event metadata, lengths, status, and process-scoped pseudonyms |
+| Production startup | Intentionally disabled |
+| Tests | Offline safety and privacy checks only |
 
-原项目探索了一个消息平台中的业务办理 Agent：用户通过对话查询状态、选择项目并确认提交；Agent 根据场景知识、身份上下文和工具返回结果组织回复。
+## What this repository demonstrates
 
-公开快照保留的是设计成果，而不是原业务系统：
+### 1. Tool-gated state changes
 
-- 场景路由：先选择适用的 SOP 场景，再向模型提供最小上下文；
-- 工具约束：查询与写入必须经过工具，模型不能自行宣称成功；
-- 身份边界：工具只允许处理当前会话对应的匿名主体；
-- 输入防护：对常见提示词注入与异常输入做前置检测；
-- 隐私日志：只记录事件类型、长度、状态和不可逆匿名引用；
-- 适配隔离：旧平台适配层在公开版本中被替换为不可用占位实现。
+The model is never allowed to claim that a query or update succeeded on its own. The prompt, tool dispatcher, and handler all reinforce the same rule: a success message requires a successful tool result.
 
-## 架构概览
+### 2. Scenario-first orchestration
 
-```text
-消息平台事件
-    │
-    ▼
-MessageHandler
-    ├── 输入安全检查
-    ├── 匿名身份目录
-    ├── 场景路由与 SOP 检索
-    ├── LLM 工具调用循环
-    └── 隐私安全事件日志
-              │
-              ▼
-        旧平台占位适配器
-        （公开版本始终拒绝调用）
+The agent selects a small set of relevant scenarios before the main model call. Only those sanitized SOP fragments are added to context, reducing irrelevant instructions and making the decision path easier to inspect.
+
+### 3. Subject-scoped authorization
+
+Tool calls are bound to the subject resolved for the current channel user. Requests for another subject are rejected before any adapter is called.
+
+### 4. Privacy-safe observability
+
+The event pipeline avoids raw messages, names, tool arguments, tool results, credentials, IP addresses, contact details, and identity numbers. A recursive sanitizer and a logging filter provide additional protection against accidental disclosure.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["Message event"] --> B["Input safety checks"]
+    B --> C["Anonymous subject directory"]
+    C --> D["Scenario router"]
+    D --> E["Minimal SOP context"]
+    E --> F["LLM tool loop"]
+    F --> G["Subject-scoped tool dispatcher"]
+    G --> H["Disabled legacy adapter"]
+    B --> I["Sanitized event metadata"]
+    D --> I
+    F --> I
 ```
 
-## 代码导览
+The orchestration layer remains readable. The private integration layer does not.
+
+## Repository map
 
 ```text
 src/sport_lm/
-├── api/sports.py          # 已禁用的旧平台占位适配器
-├── llm/                   # LLM 抽象与示例适配
-├── security/              # 输入过滤与数据脱敏
-├── sop/                   # 场景文档解析和路由
-├── utils/                 # 匿名事件日志与日志保护
-├── web/                   # 仅展示脱敏事件元数据的查看器
-├── wecom/                 # 消息通道封装示例
-├── prompts.py             # 泛化后的工具使用约束
-├── tools.py               # 工具注册、身份校验和参数收敛
-└── user_map.py            # 泛化后的匿名主体目录接口
+├── api/sports.py          # disabled legacy-platform placeholder
+├── llm/                   # model interface and reference adapters
+├── security/              # input checks and recursive redaction
+├── sop/                   # scenario parsing and routing
+├── utils/                 # in-memory cache and safe event logging
+├── web/                   # allowlist-only event metadata viewer
+├── wecom/                 # abstract message-channel contract + handler
+├── prompts.py             # sanitized behavioral constraints
+├── tools.py               # authorization and tool dispatch
+└── user_map.py            # generic anonymous subject directory
 ```
 
-## 公开版本的安全设计
+## Deliberately excluded
 
-### 1. 原平台适配器不可用
+The repository does **not** contain:
 
-`api/sports.py` 不包含任何真实地址、路由、字段映射或鉴权信息。查询和更新函数只返回 `503`，明确说明私有适配器未包含在公开仓库中。
+- the original organization, people, contacts, or account mappings;
+- phone numbers, identity numbers, user exports, logs, screenshots, or test records;
+- internal domains, IP addresses, routes, application identifiers, secrets, or authentication flows;
+- the original request and response schema;
+- any executable write path to the retired platform;
+- production configuration or a working production entry point;
+- internal interface documentation or operational runbooks.
 
-### 2. 最小化身份信息
+These omissions are part of the design of the public snapshot, not missing setup instructions.
 
-公开代码只使用以下通用概念：
+## Safety properties
 
-- `channel_user_id`：消息通道中的临时用户标识；
-- `subject_id`：业务主体的匿名标识；
-- `display_name`、`group`、`category`：可选的演示字段。
+The offline test suite checks that:
 
-仓库不提供用户映射文件，也不包含真实姓名、工号、手机号、证件号、组织关系或对应关系。
+1. legacy query and update operations always fail closed;
+2. cross-subject access is denied;
+3. common sensitive-value patterns are redacted;
+4. recursive event sanitization removes private fields;
+5. raw private content is never persisted by the event logger;
+6. the public entry point refuses to start a production service.
 
-### 3. 日志默认脱敏
+## Local verification
 
-日志模块会递归清理敏感键，并遮盖手机号、邮箱、证件号、IP、URL、长数字标识和常见凭据格式。业务事件不保存用户原文、模型完整回复、工具参数或工具返回数据。
-
-### 4. 不提供部署入口
-
-公开版 `main.py` 会直接终止并解释限制。它不会读取机器人凭据，不会建立消息平台连接，也不会调用旧业务平台。
-
-## 可学习的设计点
-
-- 如何把自然语言对话拆成“场景选择—知识注入—工具执行—结果确认”；
-- 如何限制模型只处理当前主体，避免越权查询；
-- 如何在工具成功之前禁止模型宣称操作完成；
-- 如何减少日志中的个人信息与业务内容；
-- 如何将不可公开的业务适配器与可公开的 Agent 编排层分离。
-
-## 已知限制
-
-- 代码来自特定项目的设计快照，没有通用化承诺；
-- 公开版缺少真实平台适配器、真实数据模型和认证配置；
-- 消息 SDK、LLM SDK 与旧项目环境可能已经变化；
-- 输入过滤仅是纵深防御的一部分，不能替代权限控制和服务端校验；
-- 示例不构成生产安全、隐私或合规建议。
-
-## 本地检查
-
-仓库仅提供不会连接外部业务平台的静态检查和单元测试：
+Only offline checks are supported:
 
 ```bash
 python -m compileall -q src tests
 python -m unittest discover -s tests -v
 ```
 
-运行测试不代表该项目可以部署。
+Passing these checks does **not** make the project deployable.
 
-## 许可与责任
+## Design limitations
 
-当前仓库未附带开源许可证。代码公开仅用于阅读、学习和作品展示；未经权利人另行授权，不授予生产部署、商业使用或恢复原系统的许可。
+- This is a project-specific design snapshot, not a general agent framework.
+- The public adapter cannot query or update any business system.
+- The input filter is defense in depth, not a substitute for server-side authorization.
+- In-memory conversation history is illustrative and not a production persistence design.
+- Reference model adapters may become outdated and are not maintained as deployment integrations.
+- No claim is made that this architecture is suitable for another organization or workflow.
 
-如发现疑似敏感信息，请不要在公开 Issue 中粘贴原文，按 [SECURITY.md](SECURITY.md) 的方式报告。
+## Responsible use
+
+Do not use this repository to infer, probe, reconnect to, or reconstruct the retired platform. Do not submit real personal data, credentials, internal endpoints, production logs, or private documentation in issues or pull requests.
+
+Potential security or privacy findings must be reported privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Copyright © 2026 WandsgYu.
+
+The project is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). It may be used, changed, and shared only for permitted noncommercial purposes under that license. Commercial use requires separate permission.
+
+This license does not restore any removed integration, grant access to any external system, or imply that the snapshot is safe to deploy.
+
+## Citation
+
+If you reference the design in research or educational material, see [CITATION.cff](CITATION.cff).
