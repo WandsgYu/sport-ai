@@ -1,55 +1,28 @@
 # Sport-LM
 
-**A sanitized, non-deployable reference snapshot of a tool-using conversational agent built for a retired, project-specific workflow.**
-
-[中文说明](README.zh-CN.md) · [Architecture](#architecture) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE.md)
+[中文说明](README.zh-CN.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 [![Public snapshot checks](https://github.com/WandsgYu/sport-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/WandsgYu/sport-ai/actions/workflows/ci.yml)
-![Status: reference only](https://img.shields.io/badge/status-reference%20only-8b5cf6)
-![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-6%20passing-16a34a)
+![Status](https://img.shields.io/badge/status-portfolio%20reference-7c3aed)
 
-> [!IMPORTANT]
-> Sport-LM is published for learning, design review, and portfolio presentation. It is **not a reusable framework, migration package, API specification, or deployment package**. The original platform adapter, credentials, schemas, data, and operational entry point have been intentionally removed.
+A reference implementation of a tool-using business-process agent: route each request to a small set of relevant scenarios, give the model only the context it needs, and enforce authorization again at the tool boundary.
 
-## At a glance
+> Sport-LM is a sanitized, non-deployable snapshot of a retired project-specific workflow. The original platform adapter, private SOPs, identities, schemas, credentials, and production entry point are not included.
 
-Sport-LM demonstrates how a business-process agent can combine:
+## What this project demonstrates
 
-- constrained tool use instead of model-generated claims of success;
-- scenario routing and minimal SOP retrieval;
-- subject-level authorization boundaries;
-- prompt-injection checks as defense in depth;
-- privacy-minimized observability;
-- clean separation between agent orchestration and private platform adapters.
+Sport-LM focuses on the orchestration layer around an LLM rather than the model itself:
 
-The public snapshot preserves those design decisions while making the original system impossible to reconstruct from this repository.
+1. **Input screening** rejects obvious prompt-injection patterns as defense in depth.
+2. **Subject resolution** maps the channel actor to a bounded anonymous subject.
+3. **Scenario routing** selects only the relevant workflow fragments.
+4. **LLM tool loop** lets the model request structured operations.
+5. **Tool authorization** binds every query or update to the current subject.
+6. **Safe observability** records allow-listed event metadata instead of raw conversations.
 
-| Area | Public snapshot behavior |
-| --- | --- |
-| Legacy business platform | Removed; placeholder always returns `503` |
-| Message-channel integration | Replaced by an abstract protocol |
-| Identity data | Generic anonymous fields only |
-| Logs | Event metadata, lengths, status, and process-scoped pseudonyms |
-| Production startup | Intentionally disabled |
-| Tests | Offline safety and privacy checks only |
-
-## What this repository demonstrates
-
-### 1. Tool-gated state changes
-
-The model is never allowed to claim that a query or update succeeded on its own. The prompt, tool dispatcher, and handler all reinforce the same rule: a success message requires a successful tool result.
-
-### 2. Scenario-first orchestration
-
-The agent selects a small set of relevant scenarios before the main model call. Only those sanitized SOP fragments are added to context, reducing irrelevant instructions and making the decision path easier to inspect.
-
-### 3. Subject-scoped authorization
-
-Tool calls are bound to the subject resolved for the current channel user. Requests for another subject are rejected before any adapter is called.
-
-### 4. Privacy-safe observability
-
-The event pipeline avoids raw messages, names, tool arguments, tool results, credentials, IP addresses, contact details, and identity numbers. A recursive sanitizer and a logging filter provide additional protection against accidental disclosure.
+The result is an agent whose important decisions are inspectable outside the prompt.
 
 ## Architecture
 
@@ -60,90 +33,96 @@ flowchart LR
     C --> D["Scenario router"]
     D --> E["Minimal SOP context"]
     E --> F["LLM tool loop"]
-    F --> G["Subject-scoped tool dispatcher"]
-    G --> H["Disabled legacy adapter"]
-    B --> I["Sanitized event metadata"]
+    F --> G["Subject-scoped dispatcher"]
+    G --> H["Disabled public adapter"]
+    B --> I["Privacy-safe events"]
     D --> I
     F --> I
+    G --> I
 ```
 
-The orchestration layer remains readable. The private integration layer does not.
+## Engineering decisions
+
+| Decision | Why it matters |
+| --- | --- |
+| Scenario-first context | Reduces irrelevant instructions and makes routing easier to inspect |
+| Tool-gated success | The model cannot claim a query or update succeeded without a successful tool result |
+| Subject-scoped calls | Cross-subject reads and writes are rejected before reaching an adapter |
+| Allow-listed tool payloads | Update values are normalized to a small public vocabulary |
+| Disabled legacy adapter | The portfolio snapshot cannot reconnect to or mutate the retired platform |
+| Privacy-minimized events | Operators retain status and timing signals without raw messages or identifiers |
+
+## Public snapshot behavior
+
+| Component | Included behavior |
+| --- | --- |
+| Message channel | Abstract client contract and reference handler |
+| Models | Interface plus reference adapters |
+| SOP layer | Generic parser and scenario router |
+| Business tools | Structured definitions and subject-level checks |
+| Legacy integration | Refusing placeholder that returns an unavailable response |
+| Web viewer | Allow-list-only event metadata views |
+| Tests | Offline safety and privacy verification |
+
+## Run the offline checks
+
+```bash
+git clone https://github.com/WandsgYu/sport-ai.git
+cd sport-ai
+PYTHONPATH=src python -m unittest discover -s tests -v
+```
+
+The six public tests verify that:
+
+- cross-subject tool access is rejected;
+- the legacy adapter stays disabled;
+- sensitive fields are recursively removed;
+- common identifier patterns are redacted;
+- raw private content is not persisted in event logs;
+- the public entry point refuses to start a production service.
+
+Passing these checks does not make the repository deployable.
 
 ## Repository map
 
 ```text
 src/sport_lm/
-├── api/sports.py          # disabled legacy-platform placeholder
-├── llm/                   # model interface and reference adapters
-├── security/              # input checks and recursive redaction
-├── sop/                   # scenario parsing and routing
-├── utils/                 # in-memory cache and safe event logging
-├── web/                   # allowlist-only event metadata viewer
-├── wecom/                 # abstract message-channel contract + handler
-├── prompts.py             # sanitized behavioral constraints
-├── tools.py               # authorization and tool dispatch
-└── user_map.py            # generic anonymous subject directory
+├── llm/               # model interface and reference adapters
+├── sop/               # workflow parsing and scenario routing
+├── security/          # input checks, redaction, pseudonymization
+├── wecom/             # abstract message-channel contract and handler
+├── api/sports.py      # disabled legacy-platform placeholder
+├── tools.py           # tool definitions and subject authorization
+├── user_map.py        # anonymous subject directory
+├── utils/             # cache, logging, and safe events
+└── web/               # metadata-only event viewer
+tests/                 # public snapshot safety tests
 ```
 
-## Deliberately excluded
+## How this differs from Meeting AI
 
-The repository does **not** contain:
+[Meeting AI](https://github.com/WandsgYu/meeting-AI) is a deliberately small example of confirmation-gated state changes. Sport-LM preserves a broader business-agent pipeline: channel handling, scenario retrieval, model abstraction, a tool loop, subject-level authorization, caching, and operational event views.
 
-- the original organization, people, contacts, or account mappings;
-- phone numbers, identity numbers, user exports, logs, screenshots, or test records;
-- internal domains, IP addresses, routes, application identifiers, secrets, or authentication flows;
-- the original request and response schema;
-- any executable write path to the retired platform;
-- production configuration or a working production entry point;
-- internal interface documentation or operational runbooks.
+## Publication boundary
 
-These omissions are part of the design of the public snapshot, not missing setup instructions.
+This repository contains the reusable ideas, not the former system:
 
-## Safety properties
+- no organization names, people, contacts, user exports, or operational records;
+- no private SOP content, production schemas, internal endpoints, or credentials;
+- no working production startup or executable external write path;
+- no deployment configuration, screenshots, or logs from the retired workflow.
 
-The offline test suite checks that:
+Potential privacy or security findings should be reported through [SECURITY.md](SECURITY.md), not a public issue.
 
-1. legacy query and update operations always fail closed;
-2. cross-subject access is denied;
-3. common sensitive-value patterns are redacted;
-4. recursive event sanitization removes private fields;
-5. raw private content is never persisted by the event logger;
-6. the public entry point refuses to start a production service.
+## Limitations
 
-## Local verification
-
-Only offline checks are supported:
-
-```bash
-python -m compileall -q src tests
-python -m unittest discover -s tests -v
-```
-
-Passing these checks does **not** make the project deployable.
-
-## Design limitations
-
-- This is a project-specific design snapshot, not a general agent framework.
-- The public adapter cannot query or update any business system.
-- The input filter is defense in depth, not a substitute for server-side authorization.
-- In-memory conversation history is illustrative and not a production persistence design.
-- Reference model adapters may become outdated and are not maintained as deployment integrations.
-- No claim is made that this architecture is suitable for another organization or workflow.
-
-## Responsible use
-
-Do not use this repository to infer, probe, reconnect to, or reconstruct the retired platform. Do not submit real personal data, credentials, internal endpoints, production logs, or private documentation in issues or pull requests.
-
-Potential security or privacy findings must be reported privately as described in [SECURITY.md](SECURITY.md).
+- This is a project-specific architecture snapshot, not a general agent framework.
+- The public adapter cannot query or update a real business system.
+- Input filtering is defense in depth and does not replace server-side authorization.
+- In-memory history and the reference model adapters are illustrative rather than production recommendations.
 
 ## License
 
 Copyright © 2026 WandsgYu.
 
-The project is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). It may be used, changed, and shared only for permitted noncommercial purposes under that license. Commercial use requires separate permission.
-
-This license does not restore any removed integration, grant access to any external system, or imply that the snapshot is safe to deploy.
-
-## Citation
-
-If you reference the design in research or educational material, see [CITATION.cff](CITATION.cff).
+Source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). Commercial use requires separate permission. Citation metadata is available in [CITATION.cff](CITATION.cff).
